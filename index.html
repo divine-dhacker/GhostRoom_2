@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+<title>Ghost Rooms</title>
+
+<style>
+:root {
+  --bg:#050505;
+  --accent:#ff4d6d;
+  --me:#ff4d6d;
+  --them:rgba(255,255,255,0.1);
+  --glass:rgba(255,255,255,0.05);
+  --text:#fff;
+  --muted:rgba(255,255,255,0.5);
+}
+
+body {
+  margin:0;
+  font-family:system-ui,sans-serif;
+  background:var(--bg);
+  color:var(--text);
+}
+
+.screen {
+  display:none;
+  height:100vh;
+  padding:24px;
+  box-sizing:border-box;
+}
+
+.active {
+  display:flex;
+  flex-direction:column;
+}
+
+button {
+  padding:16px;
+  border-radius:16px;
+  border:none;
+  background:var(--glass);
+  color:white;
+  font-size:16px;
+  margin-bottom:12px;
+}
+
+.primary {
+  background:var(--accent);
+}
+
+#messages {
+  flex:1;
+  overflow-y:auto;
+  display:flex;
+  flex-direction:column;
+}
+
+.bubble {
+  max-width:80%;
+  padding:12px 16px;
+  border-radius:18px;
+  margin-bottom:10px;
+}
+
+.me { background:var(--me); align-self:flex-end; }
+.them { background:var(--them); align-self:flex-start; }
+.system { align-self:center; font-size:12px; color:var(--muted); background:none; }
+
+form {
+  display:flex;
+  gap:8px;
+}
+
+input {
+  flex:1;
+  padding:14px;
+  border-radius:30px;
+  border:none;
+  background:var(--glass);
+  color:white;
+}
+</style>
+</head>
+
+<body>
+
+<!-- HOME -->
+<div id="home" class="screen active">
+  <h2>👻 Ghost Rooms</h2>
+  <p style="color:var(--muted)">Anonymous. Temporary. Real.</p>
+
+  <button class="primary" data-type="private">Create Private Room (24h)</button>
+  <button data-type="community">Create Community Room (6h)</button>
+</div>
+
+<!-- CHAT -->
+<div id="chat" class="screen">
+  <div id="roomLink" style="text-align:center;font-size:12px;color:var(--muted);padding-bottom:10px">
+    Tap to copy invite link 🔗
+  </div>
+
+  <div id="messages"></div>
+
+  <form id="chatForm">
+    <input id="messageInput" maxlength="240" placeholder="Say something…" />
+    <button class="primary">→</button>
+  </form>
+</div>
+
+<!-- EXPIRED -->
+<div id="expired" class="screen">
+  <h2>🌫️ Room Vanished</h2>
+  <button class="primary" onclick="location.reload()">Go Home</button>
+</div>
+
+<script type="module">
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+import {
+  getFirestore,
+  collection,
+  addDoc,
+  doc,
+  getDoc,
+  onSnapshot,
+  query,
+  orderBy,
+  serverTimestamp,
+  Timestamp
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+
+/* 🔐 FIREBASE CONFIG */
+const firebaseConfig = {
+  apiKey: "AIzaSyCEUDD0iB4iGFSDoC0a3wCXF8PT098Su3w",
+  authDomain: "anonymous-messaging-f93c0.firebaseapp.com",
+  projectId: "anonymous-messaging-f93c0",
+  storageBucket: "anonymous-messaging-f93c0.firebasestorage.app",
+  messagingSenderId: "990716606250",
+  appId: "1:990716606250:web:a82a15347cc5980aa01053"
+};
+
+const app = initializeApp(firebaseConfig);
+const auth = getAuth(app);
+const db = getFirestore(app);
+
+/* 👻 AUTH (NO TOP-LEVEL AWAIT) */
+let ghostUid = null;
+
+async function initAuth() {
+  const res = await signInAnonymously(auth);
+  ghostUid = res.user.uid;
+}
+initAuth();
+
+/* UI */
+const screens = {
+  home:document.getElementById("home"),
+  chat:document.getElementById("chat"),
+  expired:document.getElementById("expired")
+};
+
+const messagesEl = document.getElementById("messages");
+const input = document.getElementById("messageInput");
+const form = document.getElementById("chatForm");
+const roomLink = document.getElementById("roomLink");
+
+function show(name){
+  Object.values(screens).forEach(s=>s.classList.remove("active"));
+  screens[name].classList.add("active");
+}
+
+/* 📋 COPY LINK */
+roomLink.onclick = () => {
+  navigator.clipboard.writeText(location.href);
+  roomLink.textContent = "✅ Link Copied";
+  setTimeout(()=>roomLink.textContent="Tap to copy invite link 🔗",2000);
+};
+
+/* 🏠 CREATE ROOM (MOBILE SAFE) */
+document.addEventListener("click", async e => {
+  const btn = e.target.closest("button[data-type]");
+  if (!btn || !ghostUid) return;
+
+  const type = btn.dataset.type;
+  const hours = type === "private" ? 24 : 6;
+  const now = Timestamp.now();
+
+  const roomRef = await addDoc(collection(db,"rooms"),{
+    type,
+    createdAt: now,
+    expiresAt: Timestamp.fromMillis(now.toMillis()+hours*3600000)
+  });
+
+  location.hash = roomRef.id;
+  initRoom(roomRef.id);
+});
+
+/* 💬 INIT ROOM */
+async function initRoom(roomId){
+  show("chat");
+
+  const snap = await getDoc(doc(db,"rooms",roomId));
+  if (!snap.exists()) return show("expired");
+
+  if (Timestamp.now().toMillis() > snap.data().expiresAt.toMillis()){
+    return show("expired");
+  }
+
+  onSnapshot(
+    query(collection(db,"rooms",roomId,"messages"),orderBy("createdAt")),
+    snap=>{
+      snap.docChanges().forEach(c=>{
+        if (c.type==="added") render(c.doc.data());
+      });
+    }
+  );
+}
+
+/* ✉️ SEND MESSAGE */
+form.onsubmit = async e => {
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+
+  input.value = "";
+
+  await addDoc(collection(db,"rooms",location.hash.slice(1),"messages"),{
+    text,
+    senderUid: ghostUid,
+    createdAt: serverTimestamp()
+  });
+};
+
+/* 🖼️ RENDER */
+function render(msg){
+  if (!msg.createdAt) return;
+  const div = document.createElement("div");
+  div.className = "bubble " + (msg.senderUid === ghostUid ? "me":"them");
+  div.textContent = msg.text;
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+/* 🔗 AUTO JOIN */
+if (location.hash){
+  initRoom(location.hash.slice(1));
+}
+</script>
+
+</body>
+</html>

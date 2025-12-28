@@ -4,249 +4,240 @@
 <meta charset="UTF-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
 <title>Ghost Rooms</title>
-
+<script src="https://unpkg.com/lucide@latest"></script>
 <style>
-:root {
-  --bg:#050505;
-  --accent:#ff4d6d;
-  --me:#ff4d6d;
-  --them:rgba(255,255,255,0.1);
-  --glass:rgba(255,255,255,0.05);
-  --text:#fff;
-  --muted:rgba(255,255,255,0.5);
-}
+  :root {
+    --bg: #0a0a0a;
+    --accent: #ff4d6d;
+    --input-bg: #1a1a1a;
+    --text: #ffffff;
+    --muted: #666666;
+  }
 
-body {
-  margin:0;
-  font-family:system-ui,sans-serif;
-  background:var(--bg);
-  color:var(--text);
-}
+  body {
+    margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: var(--bg); color: var(--text);
+    height: 100dvh; overflow: hidden; display: flex; flex-direction: column;
+  }
 
-.screen {
-  display:none;
-  height:100vh;
-  padding:24px;
-  box-sizing:border-box;
-}
+  /* --- Instagram Ticker Header --- */
+  .header-zone {
+    height: 60px; border-bottom: 1px solid rgba(255,255,255,0.03);
+    position: relative; overflow: hidden; cursor: pointer; display: flex; align-items: center; justify-content: center;
+  }
+  .ticker-item {
+    position: absolute; width: 100%; text-align: center; font-size: 13px; color: var(--muted);
+    transition: all 0.5s ease-in-out; opacity: 0; transform: translateY(10px);
+  }
+  .ticker-item.active { opacity: 1; transform: translateY(0); }
+  .ticker-item.exit { opacity: 0; transform: translateY(-10px); }
 
-.active {
-  display:flex;
-  flex-direction:column;
-}
+  /* --- Message Feed --- */
+  #messages { flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; scroll-behavior: smooth; }
+  .msg-wrap { margin-bottom: 15px; max-width: 85%; position: relative; transition: transform 0.2s; }
+  .bubble { font-size: 16px; line-height: 1.4; cursor: pointer; }
+  .me { align-self: flex-end; color: var(--accent); text-align: right; }
+  .them { align-self: flex-start; color: white; }
 
-button {
-  padding:16px;
-  border-radius:16px;
-  border:none;
-  background:var(--glass);
-  color:white;
-  font-size:16px;
-  margin-bottom:12px;
-}
+  /* Timestamp (Hidden by default) */
+  .timestamp { font-size: 10px; color: var(--muted); margin-top: 4px; display: none; }
+  .msg-wrap.show-time .timestamp { display: block; }
 
-.primary {
-  background:var(--accent);
-}
+  /* --- Ghost Writing (One-Time View) --- */
+  .ghost-blur { 
+    filter: blur(6px); opacity: 0.5; user-select: none; 
+    background: linear-gradient(90deg, #333, #555, #333);
+    background-size: 200% 100%; animation: shine 1.5s infinite;
+  }
+  @keyframes shine { 0% {background-position: -200% 0;} 100% {background-position: 200% 0;} }
 
-#messages {
-  flex:1;
-  overflow-y:auto;
-  display:flex;
-  flex-direction:column;
-}
+  /* --- Input Section (Original Styling) --- */
+  .bottom-area { padding: 20px; background: var(--bg); display: flex; align-items: center; gap: 12px; }
+  .input-oval {
+    flex: 1; background: var(--input-bg); border-radius: 40px; 
+    padding: 14px 24px; display: flex; align-items: center;
+    border: 1px solid rgba(255,255,255,0.05);
+  }
+  input { flex: 1; background: transparent; border: none; color: white; font-size: 16px; outline: none; }
+  input::placeholder { color: var(--muted); }
 
-.bubble {
-  max-width:80%;
-  padding:12px 16px;
-  border-radius:18px;
-  margin-bottom:10px;
-}
+  /* WhatsApp Style Send */
+  .circle-send {
+    width: 150px; height: 56px; background: #075e54; border-radius: 50%;
+    color: white; display: flex; align-items: center; justify-content: center; cursor: pointer; border: none;
+  }
 
-.me { background:var(--me); align-self:flex-end; }
-.them { background:var(--them); align-self:flex-start; }
-.system { align-self:center; font-size:12px; color:var(--muted); background:none; }
+  /* --- Bottom Sheet --- */
+  .sheet-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.8); display: none; z-index: 1000; }
+  .bottom-sheet { 
+    position: fixed; bottom: -100%; left: 0; right: 0; background: #121212; 
+    border-radius: 25px 25px 0 0; padding: 30px 20px; transition: bottom 0.4s cubic-bezier(0.18, 0.89, 0.32, 1.28); z-index: 1001; 
+  }
+  body.sheet-open .bottom-sheet { bottom: 0; }
+  body.sheet-open .sheet-overlay { display: block; }
 
-form {
-  display:flex;
-  gap:8px;
-}
-
-input {
-  flex:1;
-  padding:14px;
-  border-radius:30px;
-  border:none;
-  background:var(--glass);
-  color:white;
-}
+  .loader { width: 24px; height: 24px; border: 2px solid rgba(255,255,255,0.1); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
 </style>
 </head>
+<body id="mainBody">
 
-<body>
-
-<!-- HOME -->
-<div id="home" class="screen active">
-  <h2>👻 Ghost Rooms</h2>
-  <p style="color:var(--muted)">Anonymous. Temporary. Real.</p>
-
-  <button class="primary" data-type="private">Create Private Room (24h)</button>
-  <button data-type="community">Create Community Room (6h)</button>
+<div id="home" style="display: flex; flex-direction: column; height: 100dvh; justify-content: center; align-items: center;">
+  <h1 style="font-weight: 200; letter-spacing: 5px;">GHOST</h1>
+  <div style="margin-top: 40px; width: 80%;">
+    <button id="launchBtn" onclick="handleLaunch('private')" class="circle-send" style="width: 100%; border-radius: 12px; background: var(--input-bg); border: 1px solid rgba(255,255,255,0.05);">PRIVATE VOID</button>
+  </div>
 </div>
 
-<!-- CHAT -->
-<div id="chat" class="screen">
-  <div id="roomLink" style="text-align:center;font-size:12px;color:var(--muted);padding-bottom:10px">
-    Tap to copy invite link 🔗
-  </div>
+<div id="chat" style="display: none; height: 100dvh; flex-direction: column;">
+  <div class="header-zone" id="ticker" onmousedown="startTimer()" onmouseup="handleHeader()" ontouchstart="startTimer()" ontouchend="handleHeader()">
+    </div>
 
   <div id="messages"></div>
-
-  <form id="chatForm">
-    <input id="messageInput" maxlength="240" placeholder="Say something…" />
-    <button class="primary">→</button>
-  </form>
+  
+  <div class="bottom-area" id="inputArea">
+    <div class="input-oval">
+      <i data-lucide="plus" style="width:20px; color:var(--muted); cursor:pointer" onclick="openSheet('media')"></i>
+      <input id="msgInput" placeholder="Whisper into the void..." autocomplete="off">
+      <i id="ghostBtn" data-lucide="ghost" style="width:20px; color:var(--muted); cursor:pointer" onclick="toggleGhost()"></i>
+    </div>
+    <button id="sendBtn" class="circle-send">
+      <i data-lucide="send" style="width:22px;"></i>
+    </button>
+  </div>
 </div>
 
-<!-- EXPIRED -->
-<div id="expired" class="screen">
-  <h2>🌫️ Room Vanished</h2>
-  <button class="primary" onclick="location.reload()">Go Home</button>
+<div class="sheet-overlay" onclick="closeSheet()"></div>
+<div class="bottom-sheet" id="sheetContainer">
+  <div style="width:40px; height:4px; background:#333; margin:0 auto 20px; border-radius:10px;"></div>
+  <div id="sheetBody"></div>
 </div>
 
 <script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
-import {
-  getFirestore,
-  collection,
-  addDoc,
-  doc,
-  getDoc,
-  onSnapshot,
-  query,
-  orderBy,
-  serverTimestamp,
-  Timestamp
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+  import { getAuth, signInAnonymously } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+  import { getFirestore, collection, addDoc, onSnapshot, query, orderBy, serverTimestamp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
 
-/* 🔐 FIREBASE CONFIG */
-const firebaseConfig = {
-  apiKey: "AIzaSyCEUDD0iB4iGFSDoC0a3wCXF8PT098Su3w",
-  authDomain: "anonymous-messaging-f93c0.firebaseapp.com",
-  projectId: "anonymous-messaging-f93c0",
-  storageBucket: "anonymous-messaging-f93c0.firebasestorage.app",
-  messagingSenderId: "990716606250",
-  appId: "1:990716606250:web:a82a15347cc5980aa01053"
-};
+  const firebaseConfig = { apiKey: "AIzaSyCEUDD0iB4iGFSDoC0a3wCXF8PT098Su3w", authDomain: "anonymous-messaging-f93c0.firebaseapp.com", projectId: "anonymous-messaging-f93c0", storageBucket: "anonymous-messaging-f93c0.firebasestorage.app", messagingSenderId: "990716606250", appId: "1:990716606250:web:a82a15347cc5980aa01053" };
+  const app = initializeApp(firebaseConfig);
+  const db = getFirestore(app);
+  const auth = getAuth(app);
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+  let currentRoom = null, uid = null, isCreator = false, ghostActive = false;
 
-/* 👻 AUTH (NO TOP-LEVEL AWAIT) */
-let ghostUid = null;
+  // --- 1. Ticker Logic (Instagram Style) ---
+  const tickerData = ["The Void", "4 Spirits Online", "23h 58m Remaining"];
+  let tIdx = 0;
+  function rotateTicker() {
+    const container = document.getElementById('ticker');
+    const old = container.querySelector('.active');
+    if(old) { old.classList.replace('active', 'exit'); setTimeout(()=>old.remove(), 500); }
+    const next = document.createElement('div');
+    next.className = 'ticker-item active';
+    next.textContent = tickerData[tIdx];
+    container.appendChild(next);
+    tIdx = (tIdx + 1) % tickerData.length;
+  }
+  setInterval(rotateTicker, 3500);
 
-async function initAuth() {
-  const res = await signInAnonymously(auth);
-  ghostUid = res.user.uid;
-}
-initAuth();
+  // --- 2. Gestures ---
+  let pressTimer, clickCount = 0;
+  window.startTimer = () => pressTimer = setTimeout(() => window.location.href='history.html', 800);
+  window.handleHeader = () => {
+    clearTimeout(pressTimer);
+    clickCount++;
+    if(clickCount === 1) {
+      setTimeout(() => {
+        if(clickCount === 1 && isCreator) openSheet('edit');
+        clickCount = 0;
+      }, 300);
+    } else if(clickCount === 2) {
+      clickCount = 0;
+      if(navigator.share) navigator.share({ title: 'Join Void', url: window.location.href });
+    }
+  };
 
-/* UI */
-const screens = {
-  home:document.getElementById("home"),
-  chat:document.getElementById("chat"),
-  expired:document.getElementById("expired")
-};
-
-const messagesEl = document.getElementById("messages");
-const input = document.getElementById("messageInput");
-const form = document.getElementById("chatForm");
-const roomLink = document.getElementById("roomLink");
-
-function show(name){
-  Object.values(screens).forEach(s=>s.classList.remove("active"));
-  screens[name].classList.add("active");
-}
-
-/* 📋 COPY LINK */
-roomLink.onclick = () => {
-  navigator.clipboard.writeText(location.href);
-  roomLink.textContent = "✅ Link Copied";
-  setTimeout(()=>roomLink.textContent="Tap to copy invite link 🔗",2000);
-};
-
-/* 🏠 CREATE ROOM (MOBILE SAFE) */
-document.addEventListener("click", async e => {
-  const btn = e.target.closest("button[data-type]");
-  if (!btn || !ghostUid) return;
-
-  const type = btn.dataset.type;
-  const hours = type === "private" ? 24 : 6;
-  const now = Timestamp.now();
-
-  const roomRef = await addDoc(collection(db,"rooms"),{
-    type,
-    createdAt: now,
-    expiresAt: Timestamp.fromMillis(now.toMillis()+hours*3600000)
-  });
-
-  location.hash = roomRef.id;
-  initRoom(roomRef.id);
-});
-
-/* 💬 INIT ROOM */
-async function initRoom(roomId){
-  show("chat");
-
-  const snap = await getDoc(doc(db,"rooms",roomId));
-  if (!snap.exists()) return show("expired");
-
-  if (Timestamp.now().toMillis() > snap.data().expiresAt.toMillis()){
-    return show("expired");
+  // --- 3. Keyboard Fix ---
+  if(window.visualViewport) {
+    window.visualViewport.addEventListener('resize', () => {
+      const offset = window.innerHeight - window.visualViewport.height;
+      document.getElementById('inputArea').style.transform = `translateY(-${offset}px)`;
+    });
   }
 
-  onSnapshot(
-    query(collection(db,"rooms",roomId,"messages"),orderBy("createdAt")),
-    snap=>{
-      snap.docChanges().forEach(c=>{
-        if (c.type==="added") render(c.doc.data());
+  // --- 4. Room Logic ---
+  window.handleLaunch = async () => {
+    document.getElementById('launchBtn').innerHTML = '<div class="loader"></div>';
+    await signInAnonymously(auth);
+    uid = auth.currentUser.uid;
+    const ref = await addDoc(collection(db, "rooms"), { creator: uid, createdAt: serverTimestamp() });
+    isCreator = true;
+    window.location.hash = ref.id;
+    openChat(ref.id);
+  };
+
+  function openChat(id) {
+    currentRoom = id;
+    document.getElementById('home').style.display = 'none';
+    document.getElementById('chat').style.display = 'flex';
+    lucide.createIcons();
+    rotateTicker();
+
+    onSnapshot(query(collection(db, "rooms", id, "messages"), orderBy("createdAt", "asc")), snap => {
+      const msgDiv = document.getElementById('messages');
+      msgDiv.innerHTML = '';
+      snap.forEach(d => {
+        const data = d.data();
+        const wrap = document.createElement('div');
+        wrap.className = `msg-wrap ${data.sender === uid ? 'me' : 'them'}`;
+        wrap.onclick = () => {
+          wrap.classList.add('show-time');
+          setTimeout(() => wrap.classList.remove('show-time'), 2000);
+        };
+        
+        const textClass = data.isGhost ? 'bubble ghost-blur' : 'bubble';
+        wrap.innerHTML = `<div class="${textClass}" onclick="viewOnce(this, ${data.isGhost})">${data.text}</div><div class="timestamp">Just now</div>`;
+        msgDiv.appendChild(wrap);
       });
+      msgDiv.scrollTop = msgDiv.scrollHeight;
+    });
+  }
+
+  window.viewOnce = (el, isGhost) => {
+    if(!isGhost) return;
+    el.classList.remove('ghost-blur');
+    setTimeout(() => el.closest('.msg-wrap').style.opacity = '0', 3000);
+    setTimeout(() => el.closest('.msg-wrap').remove(), 3500);
+  };
+
+  window.toggleGhost = () => {
+    ghostActive = !ghostActive;
+    document.getElementById('ghostBtn').style.color = ghostActive ? 'var(--accent)' : 'var(--muted)';
+  };
+
+  document.getElementById('sendBtn').onclick = async () => {
+    const text = document.getElementById('msgInput').value.trim();
+    if(!text) return;
+    document.getElementById('msgInput').value = '';
+    await addDoc(collection(db, "rooms", currentRoom, "messages"), {
+      text, sender: uid, isGhost: ghostActive, createdAt: serverTimestamp()
+    });
+    ghostActive = false;
+    document.getElementById('ghostBtn').style.color = 'var(--muted)';
+  };
+
+  window.openSheet = (mode) => {
+    const body = document.getElementById('sheetBody');
+    if(mode === 'edit') {
+      body.innerHTML = `<h2 style="font-weight:200">Edit Void</h2><input placeholder="Community Name" style="width:100%; padding:15px; background:#1a1a1a; border:none; border-radius:10px; color:white;"><button class="circle-send" style="width:100%; margin-top:20px; border-radius:10px;">Update</button>`;
+    } else {
+      body.innerHTML = `<h2 style="font-weight:200">Shared Media</h2><div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;"><div style="background:#1a1a1a; aspect-ratio:1; border-radius:10px;"></div><div style="background:#1a1a1a; aspect-ratio:1; border-radius:10px;"></div></div>`;
     }
-  );
-}
+    document.getElementById('mainBody').classList.add('sheet-open');
+  };
+  window.closeSheet = () => document.getElementById('mainBody').classList.remove('sheet-open');
 
-/* ✉️ SEND MESSAGE */
-form.onsubmit = async e => {
-  e.preventDefault();
-  const text = input.value.trim();
-  if (!text) return;
-
-  input.value = "";
-
-  await addDoc(collection(db,"rooms",location.hash.slice(1),"messages"),{
-    text,
-    senderUid: ghostUid,
-    createdAt: serverTimestamp()
-  });
-};
-
-/* 🖼️ RENDER */
-function render(msg){
-  if (!msg.createdAt) return;
-  const div = document.createElement("div");
-  div.className = "bubble " + (msg.senderUid === ghostUid ? "me":"them");
-  div.textContent = msg.text;
-  messagesEl.appendChild(div);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
-}
-
-/* 🔗 AUTO JOIN */
-if (location.hash){
-  initRoom(location.hash.slice(1));
-}
+  if(window.location.hash) openChat(window.location.hash.slice(1));
 </script>
-
 </body>
 </html>
